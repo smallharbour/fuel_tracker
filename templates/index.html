@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        {% if current_user.is_authenticated %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Add New Entry</h5>
+                <form action="{{ url_for('add_entry') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="liters" class="form-label">Liters</label>
+                        <input type="number" step="0.01" class="form-control" id="liters" name="liters" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="kilometers" class="form-label">Kilometers</label>
+                        <input type="number" step="0.01" class="form-control" id="kilometers" name="kilometers" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="cost" class="form-label">Cost (€)</label>
+                        <input type="number" step="0.01" class="form-control" id="cost" name="cost" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Entry</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">Welcome to Fuel Tracker</h5>
+                <p class="card-text">Please login or register to start tracking your fuel consumption.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-outline-primary">Register</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        {% if current_user.is_authenticated and entries %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Fuel Consumption History</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Liters</th>
+                                <th>Kilometers</th>
+                                <th>Cost (€)</th>
+                                <th>L/100km</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in entries %}
+                            <tr>
+                                <td>{{ entry.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ "%.2f"|format(entry.liters) }}</td>
+                                <td>{{ "%.1f"|format(entry.kilometers) }}</td>
+                                <td>{{ "%.2f"|format(entry.cost) }}</td>
+                                <td>{{ "%.1f"|format(entry.liters / entry.kilometers * 100) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Consumption Statistics</h5>
+                <canvas id="consumptionChart"></canvas>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Track Your Fuel Consumption</h5>
+                <p class="card-text">Get insights into your vehicle's fuel efficiency and costs.</p>
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <i class="bi bi-graph-up display-4 text-primary"></i>
+                            <h6 class="mt-2">Track Efficiency</h6>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <i class="bi bi-cash-stack display-4 text-primary"></i>
+                            <h6 class="mt-2">Monitor Costs</h6>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <i class="bi bi-calendar-check display-4 text-primary"></i>
+                            <h6 class="mt-2">Historical Data</h6>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_authenticated and entries %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('consumptionChart').getContext('2d');
+        
+        // Prepare data for the chart
+        const chartData = {
+            labels: {{ entries|map(attribute='date')|map('strftime')|list|tojson }},
+            consumption: {{ entries|map(attribute='liters')|map('float')|list|tojson }},
+            efficiency: {{ entries|map('efficiency')|list|tojson }},
+            costs: {{ entries|map(attribute='cost')|map('float')|list|tojson }}
+        };
+
+        // Create the chart
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [
+                    {
+                        label: 'Fuel Consumption (L)',
+                        data: chartData.consumption,
+                        borderColor: '#3498db',
+                        tension: 0.1,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Efficiency (L/100km)',
+                        data: chartData.efficiency,
+                        borderColor: '#2ecc71',
+                        tension: 0.1,
+                        fill: false,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Liters'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'L/100km'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+
+        // Calculate and display statistics
+        const totalLiters = chartData.consumption.reduce((a, b) => a + b, 0);
+        const totalCost = chartData.costs.reduce((a, b) => a + b, 0);
+        const avgEfficiency = chartData.efficiency.reduce((a, b) => a + b, 0) / chartData.efficiency.length;
+        const costPerLiter = totalCost / totalLiters;
+
+        // Add statistics to the page
+        const statsHtml = `
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Total Fuel</h6>
+                            <p class="card-text h4">${totalLiters.toFixed(1)} L</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Total Cost</h6>
+                            <p class="card-text h4">€${totalCost.toFixed(2)}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Avg. Efficiency</h6>
+                            <p class="card-text h4">${avgEfficiency.toFixed(1)} L/100km</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Cost/Liter</h6>
+                            <p class="card-text h4">€${costPerLiter.toFixed(2)}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Find the correct container for statistics
+        const statsContainer = document.querySelector('.card-body:has(#consumptionChart)');
+        if (statsContainer) {
+            statsContainer.insertAdjacentHTML('beforeend', statsHtml);
+        } else {
+            console.error('Could not find the statistics container');
+        }
+    });
+</script>
+{% endif %}
+{% endblock %} 
